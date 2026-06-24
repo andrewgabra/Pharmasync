@@ -1,0 +1,13 @@
+{
+  "name": "pharmasync",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PharmaSync — Stock Export Manager for G Pharmacy",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
