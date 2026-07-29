@@ -850,7 +850,13 @@ function talabatPrice(salesPrice,name,originType){
   const n=String(name||'').toLowerCase();
   const isBaby=BABY_KW.some(k=>n.includes(k))||String(originType||'').trim()==='Baby Formulas';
   let adj=salesPrice>150?salesPrice-1:salesPrice>100?salesPrice-0.5:salesPrice-0.1;
-  return isBaby?Math.ceil(adj*1.1/0.5)*0.5:+adj.toFixed(2);
+  let base=isBaby?Math.ceil(adj*1.1/0.5)*0.5:+adj.toFixed(2);
+  // +10% markup on Talabat products, EXCEPT medications (Origin Type "Imported" or
+  // "Local"), which are excluded. Applied here so both the Price column and the
+  // derived discounted_price rise 10% together. Talabat sheets only (HE/NCTGO/NCTMP).
+  const ot=String(originType||'').trim().toLowerCase();
+  const isMedication=(ot==='imported'||ot==='local');
+  return isMedication ? base : +(base*1.10).toFixed(2);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1705,7 +1711,23 @@ function bindEvents(){
   const rsc=document.getElementById('removeSkuCol');if(rsc)rsc.onchange=()=>{S.removeSkuCol=rsc.value;render();};
   const snc=document.getElementById('sNameCol');if(snc)snc.onchange=()=>{S.sNameCol=snc.value;};
   const srch=document.getElementById('disc-search');
-  if(srch)srch.addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{S.filters.search=srch.value;S.discPage=0;if(S.mode==='single')updateDiscTable();else render();},120);});
+  if(srch)srch.addEventListener('input',()=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(()=>{
+      const caret=srch.selectionStart;      // remember cursor position
+      S.filters.search=srch.value;S.discPage=0;
+      if(S.mode==='single'){
+        updateDiscTable();                  // single: table-only update keeps focus
+      }else{
+        render();                           // multi: full re-render...
+        const again=document.getElementById('disc-search');
+        if(again){                          // ...so restore focus + caret afterwards
+          again.focus();
+          try{again.setSelectionRange(caret,caret);}catch(e){}
+        }
+      }
+    },250);
+  });
   if(S.mode==='single'&&S.step===3)updateDiscTable();
   updateUndoRedoBtns();
   setupDrop('dz-mb-remove','mbRemoveFile',f=>{
@@ -2416,7 +2438,9 @@ function buildTalabatCSV(rows){
   const hdr=['SKU','reason','start_date','end_date','Campaign_status','discounted_price','max_no_of_orders','Price','active','maximum_sales_quantity'];
   return[hdr.map(h=>`"${h}"`).join(','),...rows.map(r=>{
     const talP=talabatPrice(r.price,r.name,r.origin);
-    const discP=r.discPrice<r.price?r.discPrice:'';
+    // Run the discounted price through the same Talabat formula (+10%) so it stays
+    // consistent with the Price column. Only emit it when an actual discount exists.
+    const discP=(r.discPrice<r.price)?talabatPrice(r.discPrice,r.name,r.origin):'';
     const vals={SKU:r.sku,reason:'',start_date:'',end_date:'',Campaign_status:'',discounted_price:discP,max_no_of_orders:'',Price:talP,active:r.stock>0?1:0,maximum_sales_quantity:Math.max(0,Math.floor(Number(r.stock)||0))};
     return hdr.map(h=>`"${vals[h]??''}"`).join(',');
   })].join('\r\n');
